@@ -93,30 +93,40 @@ io.on('connection', (socket) => {
     }
   });
 
+
   socket.on('makeGuess', ({ guess }) => {
     const lowerGuess = guess.toLowerCase();
 
-    // --- NEW VALIDATION ---
     if (!validWords.has(lowerGuess)) {
-      // Notify only the guesser that their word is not in the list and stop.
       return socket.emit('invalidGuess', `'${guess.toUpperCase()}' is not in the word list.`);
     }
-    // ----------------------
 
     const room = findRoomBySocketId(socket.id);
     const secret = room ? room.secretWord : undefined;
     
-    // This check is important to prevent crashes if the room or secret word doesn't exist
     if (room && secret) {
-      let feedback = [];
+      let feedback = Array(5).fill('gray'); // Start with all gray
+      let secretChars = secret.split('');   // Create a mutable array of secret letters
+      let guessChars = lowerGuess.split('');
+
+      // First Pass: Find all GREEN matches
       for (let i = 0; i < 5; i++) {
-          if (lowerGuess[i] === secret[i]) {
-              feedback.push('green');
-          } else if (secret.includes(lowerGuess[i])) {
-              feedback.push('yellow');
-          } else {
-              feedback.push('gray');
-          }
+        if (guessChars[i] === secretChars[i]) {
+          feedback[i] = 'green';
+          secretChars[i] = null; // Mark this letter as "used"
+          guessChars[i] = null;  // Mark this letter as "used"
+        }
+      }
+
+      // Second Pass: Find all YELLOW matches with the remaining letters
+      for (let i = 0; i < 5; i++) {
+        if (guessChars[i] === null) continue; // Skip letters that are already green
+
+        const yellowIndex = secretChars.indexOf(guessChars[i]);
+        if (yellowIndex !== -1) {
+          feedback[i] = 'yellow';
+          secretChars[yellowIndex] = null; // Mark this letter as "used" to prevent re-matching
+        }
       }
       
       room.guesses.push({ guess: guess.toUpperCase(), feedback });
